@@ -100,7 +100,7 @@ h1 {
 .video-stack {
   position: relative;
   overflow: hidden;
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 3 / 4;
   border-radius: 22px;
   background:
     linear-gradient(180deg, rgba(8, 10, 18, 0.2), rgba(8, 10, 18, 0.65)),

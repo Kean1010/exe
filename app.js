@@ -216,9 +216,7 @@ async function startCamera() {
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        facingMode: gameState.facingMode,
-        width: { ideal: 720 },
-        height: { ideal: 1280 }
+        facingMode: gameState.facingMode
       },
       audio: false
     });
@@ -248,6 +246,13 @@ function resizeCanvas() {
   const rect = video.getBoundingClientRect();
   canvas.width = rect.width;
   canvas.height = rect.height;
+
+  if (video.videoWidth && video.videoHeight) {
+    const stack = video.parentElement;
+    if (stack) {
+      stack.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+    }
+  }
 }
 
 function setMode(mode) {
