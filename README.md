@@ -1,19 +1,32 @@
 # RepQuest Squat Arena
 
-A lightweight browser app that uses your phone camera to count squats and turn them into a small game.
+A browser game that uses your phone camera to count squats, with solo stage mode and online 2-player battles.
 
 ## What it does
 
 - `Single Player`: starts at 10 squats for Stage 1, then increases by 5 every stage
-- `2 Players`: two phones can join the same room and race live for 60 seconds
+- `2 Players`: two phones can join the same room from different locations and race live for 60 seconds
 - Uses the device camera plus pose tracking to estimate squat reps in real time
-- Includes a lightweight built-in room backend for realtime online matches
+- Speaks each rep count out loud and shows the live count and target on the camera overlay
 
-## How to run
+## Project structure
 
-Because mobile browsers only allow camera access on `https://` or `localhost`, serve the files with a local web server.
+- `index.html` - app layout
+- `styles.css` - mobile-friendly visual design
+- `app.js` - camera, pose tracking, solo mode, and online mode client logic
+- `api/create-room.js` - create a multiplayer room
+- `api/join-room.js` - join a multiplayer room
+- `api/start-match.js` - start the 60-second online match
+- `api/update-score.js` - sync live score updates
+- `api/reset-match.js` - reset a room back to lobby
+- `api/finalize-match.js` - close a finished match
+- `supabase/schema.sql` - database table and realtime setup
 
-### Option 1: Node.js
+## Local use
+
+### Single-player only
+
+You can still run the front end locally for camera testing:
 
 ```powershell
 cd "D:\project exercise"
@@ -22,42 +35,49 @@ node .\server.js
 
 Then open:
 
-- On this computer: `http://localhost:8080`
-- On your phone: `http://YOUR-PC-IP:8080`
+- `http://localhost:8080`
 
-### Option 2: Python
+Single-player mode will work locally.
 
-```powershell
-cd "D:\project exercise"
-python -m http.server 8080
-```
+### Online 2-player mode
 
-Then open:
+The online room system now expects:
 
-- On this computer: `http://localhost:8080`
-- On your phone: `http://YOUR-PC-IP:8080`
+1. Vercel to host the static app and API routes
+2. Supabase to store room state and broadcast realtime updates
 
-Your phone and computer need to be on the same Wi-Fi network.
+That is what allows 2 phones in different locations to stay in sync.
 
-## Online 2-player mode
+## Supabase setup
 
-- For testing on one local network, run `node .\server.js` on one machine and open that machine's IP from both phones
-- For real different-location play, deploy this same app and `server.js` to a public server so both phones can reach the same URL
-- Flow:
-  - Player 1 creates a room
-  - Player 2 joins with the room code
-  - Either player starts the online match
-  - Both phones count locally and sync scores to the shared room in realtime
+1. Create a Supabase project.
+2. Open the SQL editor.
+3. Run `supabase/schema.sql`.
+4. Copy these values from Supabase:
+   - Project URL
+   - anon public key
+   - service role key
 
-## Tips for better rep counting
+## Vercel setup
 
-- Put the phone on the side, not directly in front of you
-- Keep your hips, knees, and ankles visible
-- Use a bright room with clear contrast
-- The counter is a practical first version, so you may want to tune thresholds after testing with your actual squat depth
+Import the GitHub repo into Vercel, then add these environment variables:
 
-## Files
+- `REPQUEST_SUPABASE_URL`
+- `REPQUEST_SUPABASE_ANON_KEY`
+- `REPQUEST_SUPABASE_SERVICE_ROLE_KEY`
 
-- `index.html` - app layout
-- `styles.css` - mobile-friendly visual design
-- `app.js` - camera, pose tracking, rep logic, and game state
+After that, redeploy the Vercel project.
+
+## How online mode works
+
+1. Player 1 opens the deployed app and taps `Create Room`
+2. Player 1 shares the room code
+3. Player 2 opens the same deployed app on another phone and taps `Join`
+4. Either player starts the match
+5. Both phones count squats locally and sync scores through Supabase Realtime
+
+## Notes
+
+- If the Vercel or Supabase env vars are missing, the app still works in single-player mode
+- The room data is shared, so this version is suitable for phones in different locations
+- This is still a lightweight first implementation, so we can add player names, rematches, anti-cheat checks, or room cleanup next
