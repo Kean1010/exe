@@ -13,6 +13,9 @@ const startCameraBtn = document.getElementById("startCameraBtn");
 const switchCameraBtn = document.getElementById("switchCameraBtn");
 const startGameBtn = document.getElementById("startGameBtn");
 const resetGameBtn = document.getElementById("resetGameBtn");
+const zoomSlider = document.getElementById("zoomSlider");
+const zoomValue = document.getElementById("zoomValue");
+const zoomHint = document.getElementById("zoomHint");
 const modeButtons = [...document.querySelectorAll(".mode-btn")];
 
 const cameraStatus = document.getElementById("cameraStatus");
@@ -60,6 +63,7 @@ let stream;
 let lastVideoTime = -1;
 let animationFrameId;
 let countBurstTimeoutId;
+let currentZoomRange = null;
 
 function getDisplayedCount() {
   return gameState.mode === "single"
@@ -113,6 +117,95 @@ async function setupPoseLandmarker() {
   poseStatus.textContent = "Pose model ready";
 }
 
+function updateZoomReadout(value) {
+  zoomValue.textContent = `${Number(value).toFixed(1)}x`;
+}
+
+function resetZoomUi(message) {
+  currentZoomRange = null;
+  zoomSlider.disabled = true;
+  zoomSlider.min = "1";
+  zoomSlider.max = "3";
+  zoomSlider.step = "0.1";
+  zoomSlider.value = "1";
+  updateZoomReadout(1);
+  zoomHint.textContent = message;
+}
+
+async function configureZoomControls() {
+  const [videoTrack] = stream?.getVideoTracks?.() ?? [];
+
+  if (!videoTrack) {
+    resetZoomUi("Start the camera to check whether zoom control is available on this device.");
+    return;
+  }
+
+  const capabilities = videoTrack.getCapabilities?.() ?? {};
+  const settings = videoTrack.getSettings?.() ?? {};
+
+  if (typeof capabilities.zoom !== "object") {
+    resetZoomUi("This camera does not expose zoom control in the browser, so we are using the widest view available.");
+    return;
+  }
+
+  const minZoom = Number(capabilities.zoom.min ?? 1);
+  const maxZoom = Number(capabilities.zoom.max ?? minZoom);
+  const stepZoom = Number(capabilities.zoom.step ?? 0.1);
+  const safeMinZoom = Number.isFinite(minZoom) ? minZoom : 1;
+  const safeMaxZoom = Number.isFinite(maxZoom) ? maxZoom : safeMinZoom;
+  const safeStepZoom = Number.isFinite(stepZoom) && stepZoom > 0 ? stepZoom : 0.1;
+  const initialZoom =
+    typeof settings.zoom === "number" && Number.isFinite(settings.zoom)
+      ? settings.zoom
+      : safeMinZoom;
+
+  currentZoomRange = {
+    min: safeMinZoom,
+    max: safeMaxZoom,
+    step: safeStepZoom
+  };
+
+  zoomSlider.disabled = false;
+  zoomSlider.min = String(safeMinZoom);
+  zoomSlider.max = String(safeMaxZoom);
+  zoomSlider.step = String(safeStepZoom);
+
+  try {
+    await videoTrack.applyConstraints({
+      advanced: [{ zoom: safeMinZoom }]
+    });
+    zoomSlider.value = String(safeMinZoom);
+    updateZoomReadout(safeMinZoom);
+    zoomHint.textContent = "Zoom is set to the widest available view. Move the slider if you want to zoom back in.";
+  } catch (error) {
+    console.warn("Could not force minimum zoom", error);
+    zoomSlider.value = String(initialZoom);
+    updateZoomReadout(initialZoom);
+    zoomHint.textContent = "Zoom control is available, but this browser did not let us force the widest setting automatically.";
+  }
+}
+
+async function applyZoom(value) {
+  const [videoTrack] = stream?.getVideoTracks?.() ?? [];
+
+  if (!videoTrack || !currentZoomRange) {
+    return;
+  }
+
+  const numericValue = Number(value);
+  updateZoomReadout(numericValue);
+
+  try {
+    await videoTrack.applyConstraints({
+      advanced: [{ zoom: numericValue }]
+    });
+    zoomHint.textContent = "Use the slider to find the framing that shows your full body best.";
+  } catch (error) {
+    console.warn("Could not apply zoom", error);
+    zoomHint.textContent = "This browser refused that zoom value. Try a nearby position on the slider.";
+  }
+}
+
 async function startCamera() {
   if (stream) {
     stream.getTracks().forEach((track) => track.stop());
@@ -134,6 +227,7 @@ async function startCamera() {
     await video.play();
 
     resizeCanvas();
+    await configureZoomControls();
     cameraStatus.textContent =
       gameState.facingMode === "user" ? "Front camera live" : "Rear camera live";
     statusText.textContent = "Camera is live. Stand sideways and keep your full body in frame.";
@@ -144,6 +238,7 @@ async function startCamera() {
   } catch (error) {
     console.error(error);
     cameraStatus.textContent = "Camera blocked";
+    resetZoomUi("Camera access failed, so zoom control is unavailable right now.");
     statusText.textContent =
       "We could not access the camera. Open this app in a secure browser tab and allow camera access.";
   }
@@ -469,6 +564,12 @@ switchCameraBtn.addEventListener("click", async () => {
 });
 startGameBtn.addEventListener("click", startGame);
 resetGameBtn.addEventListener("click", resetGame);
+zoomSlider.addEventListener("input", () => {
+  updateZoomReadout(zoomSlider.value);
+});
+zoomSlider.addEventListener("change", async () => {
+  await applyZoom(zoomSlider.value);
+});
 
 modeButtons.forEach((button) => {
   button.addEventListener("click", () => setMode(button.dataset.mode));
@@ -477,6 +578,7 @@ modeButtons.forEach((button) => {
 window.addEventListener("resize", resizeCanvas);
 
 renderStats();
+resetZoomUi("Start the camera to check whether zoom control is available on this device.");
 setupPoseLandmarker().catch((error) => {
   console.error(error);
   poseStatus.textContent = "Pose model failed to load";
