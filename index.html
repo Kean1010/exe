@@ -14,9 +14,9 @@
     <header class="hero">
       <div>
         <p class="eyebrow">Camera-powered workout game</p>
-        <h1>RepQuest Push-Up Arena</h1>
+        <h1>RepQuest Squat Arena</h1>
         <p class="subcopy">
-          Use your phone camera to count push-ups, clear stages solo, or battle a friend in a 60-second showdown.
+          Use your phone camera to count squats, clear stages solo, or battle a friend in a 60-second showdown.
         </p>
       </div>
       <div class="hero-badge">Phone Ready</div>
@@ -27,9 +27,20 @@
         <div class="video-stack">
           <video id="video" playsinline></video>
           <canvas id="overlay"></canvas>
+          <div class="count-burst" id="countBurst" aria-live="polite">0</div>
           <div class="camera-overlay">
             <div class="overlay-pill" id="cameraStatus">Camera idle</div>
             <div class="overlay-pill accent" id="poseStatus">Pose model loading...</div>
+          </div>
+          <div class="game-hud">
+            <div class="hud-card">
+              <span class="hud-label">Live Count</span>
+              <strong id="hudLiveCount">0</strong>
+            </div>
+            <div class="hud-card">
+              <span class="hud-label">Target / Timer</span>
+              <strong id="hudTarget">10 reps</strong>
+            </div>
           </div>
         </div>
 
@@ -52,7 +63,7 @@
             <button class="mode-btn" data-mode="versus">2 Players</button>
           </div>
           <p class="helper-text" id="modeHelp">
-            Clear stage goals. Stage 1 starts at 10 push-ups and every stage adds 5 more.
+            Clear stage goals. Stage 1 starts at 10 squats and every stage adds 5 more.
           </p>
         </div>
 
@@ -99,9 +110,9 @@
           <h2>How To Play</h2>
           <ul>
             <li>Place the phone where your full body is visible from the side.</li>
-            <li>Keep shoulders, elbows, and wrists in frame for better counting.</li>
+            <li>Keep your hips, knees, and ankles visible for better counting.</li>
             <li>Single Player: finish the target to unlock the next stage.</li>
-            <li>2 Players: each player gets 60 seconds. Highest score wins.</li>
+            <li>2 Players: each player gets 60 seconds. Highest squat count wins.</li>
           </ul>
         </div>
       </section>

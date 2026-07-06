@@ -1,12 +1,12 @@
-# RepQuest Push-Up Arena
+# RepQuest Squat Arena
 
-A lightweight browser app that uses your phone camera to count push-ups and turn them into a small game.
+A lightweight browser app that uses your phone camera to count squats and turn them into a small game.
 
 ## What it does
 
-- `Single Player`: starts at 10 push-ups for Stage 1, then increases by 5 every stage
+- `Single Player`: starts at 10 squats for Stage 1, then increases by 5 every stage
 - `2 Players`: Player 1 gets 60 seconds, then Player 2 gets 60 seconds, and the higher score wins
-- Uses the device camera plus pose tracking to estimate push-up reps in real time
+- Uses the device camera plus pose tracking to estimate squat reps in real time
 
 ## How to run
 
@@ -41,9 +41,9 @@ Your phone and computer need to be on the same Wi-Fi network.
 ## Tips for better rep counting
 
 - Put the phone on the side, not directly in front of you
-- Keep your shoulders, elbows, and wrists visible
+- Keep your hips, knees, and ankles visible
 - Use a bright room with clear contrast
-- The counter is a practical first version, so you may want to tune thresholds after testing with your actual push-up style
+- The counter is a practical first version, so you may want to tune thresholds after testing with your actual squat depth
 
 ## Files
 

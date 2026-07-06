@@ -7,6 +7,7 @@ import {
 const video = document.getElementById("video");
 const canvas = document.getElementById("overlay");
 const ctx = canvas.getContext("2d");
+const countBurst = document.getElementById("countBurst");
 
 const startCameraBtn = document.getElementById("startCameraBtn");
 const switchCameraBtn = document.getElementById("switchCameraBtn");
@@ -19,9 +20,11 @@ const poseStatus = document.getElementById("poseStatus");
 const modeLabel = document.getElementById("modeLabel");
 const modeHelp = document.getElementById("modeHelp");
 const liveCount = document.getElementById("liveCount");
+const hudLiveCount = document.getElementById("hudLiveCount");
 const formState = document.getElementById("formState");
 const stageValue = document.getElementById("stageValue");
 const targetValue = document.getElementById("targetValue");
+const hudTarget = document.getElementById("hudTarget");
 const player1Score = document.getElementById("player1Score");
 const player2Score = document.getElementById("player2Score");
 const roundLabel = document.getElementById("roundLabel");
@@ -56,6 +59,38 @@ let drawingUtils;
 let stream;
 let lastVideoTime = -1;
 let animationFrameId;
+let countBurstTimeoutId;
+
+function getDisplayedCount() {
+  return gameState.mode === "single"
+    ? gameState.singleStageReps
+    : gameState.totalReps;
+}
+
+function flashCountOverlay(value) {
+  countBurst.textContent = String(value);
+  countBurst.classList.remove("active");
+  void countBurst.offsetWidth;
+  countBurst.classList.add("active");
+
+  clearTimeout(countBurstTimeoutId);
+  countBurstTimeoutId = setTimeout(() => {
+    countBurst.classList.remove("active");
+  }, 720);
+}
+
+function speakCount(value) {
+  if (!("speechSynthesis" in window)) {
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(String(value));
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+  window.speechSynthesis.speak(utterance);
+}
 
 async function setupPoseLandmarker() {
   poseStatus.textContent = "Loading pose model...";
@@ -129,12 +164,12 @@ function setMode(mode) {
   if (mode === "single") {
     modeLabel.textContent = "Single Player";
     modeHelp.textContent =
-      "Clear stage goals. Stage 1 starts at 10 push-ups and every stage adds 5 more.";
+      "Clear stage goals. Stage 1 starts at 10 squats and every stage adds 5 more.";
     roundLabel.textContent = "Solo Run";
   } else {
     modeLabel.textContent = "2 Players";
     modeHelp.textContent =
-      "Player 1 and Player 2 take 60-second turns. Highest push-up count wins.";
+      "Player 1 and Player 2 take 60-second turns. Highest squat count wins.";
     roundLabel.textContent = "Battle Mode";
   }
 
@@ -147,12 +182,17 @@ function startGame() {
     return;
   }
 
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.getVoices();
+  }
+
   gameState.running = true;
   gameState.repPhase = "up";
   gameState.lastRepAt = 0;
 
   if (gameState.mode === "single") {
-    statusText.textContent = `Stage ${gameState.stage} started. Target: ${gameState.currentTarget} push-ups.`;
+    statusText.textContent = `Stage ${gameState.stage} started. Target: ${gameState.currentTarget} squats.`;
   } else {
     if (gameState.versus.awaitingNextTurn) {
       gameState.versus.awaitingNextTurn = false;
@@ -217,6 +257,12 @@ function resetGame() {
   gameState.repPhase = "up";
   gameState.lastRepAt = 0;
   gameState.currentAngle = null;
+  countBurst.classList.remove("active");
+  countBurst.textContent = "0";
+
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
 
   clearInterval(gameState.versus.timerId);
   gameState.versus = {
@@ -253,6 +299,9 @@ function registerRep() {
   }
 
   renderStats();
+  const displayCount = getDisplayedCount();
+  flashCountOverlay(displayCount);
+  speakCount(displayCount);
 }
 
 function calculateAngle(a, b, c) {
@@ -271,22 +320,22 @@ function landmarkVisible(landmark) {
   return landmark && (landmark.visibility ?? 1) > 0.55;
 }
 
-function estimatePushupState(landmarks) {
-  const leftShoulder = landmarks[11];
-  const rightShoulder = landmarks[12];
-  const leftElbow = landmarks[13];
-  const rightElbow = landmarks[14];
-  const leftWrist = landmarks[15];
-  const rightWrist = landmarks[16];
+function estimateSquatState(landmarks) {
+  const leftHip = landmarks[23];
+  const rightHip = landmarks[24];
+  const leftKnee = landmarks[25];
+  const rightKnee = landmarks[26];
+  const leftAnkle = landmarks[27];
+  const rightAnkle = landmarks[28];
 
   const leftReady =
-    landmarkVisible(leftShoulder) &&
-    landmarkVisible(leftElbow) &&
-    landmarkVisible(leftWrist);
+    landmarkVisible(leftHip) &&
+    landmarkVisible(leftKnee) &&
+    landmarkVisible(leftAnkle);
   const rightReady =
-    landmarkVisible(rightShoulder) &&
-    landmarkVisible(rightElbow) &&
-    landmarkVisible(rightWrist);
+    landmarkVisible(rightHip) &&
+    landmarkVisible(rightKnee) &&
+    landmarkVisible(rightAnkle);
 
   if (!leftReady && !rightReady) {
     return { state: "No pose", angle: null };
@@ -294,24 +343,24 @@ function estimatePushupState(landmarks) {
 
   const angles = [];
   if (leftReady) {
-    angles.push(calculateAngle(leftShoulder, leftElbow, leftWrist));
+    angles.push(calculateAngle(leftHip, leftKnee, leftAnkle));
   }
   if (rightReady) {
-    angles.push(calculateAngle(rightShoulder, rightElbow, rightWrist));
+    angles.push(calculateAngle(rightHip, rightKnee, rightAnkle));
   }
 
   const angle = angles.reduce((sum, value) => sum + value, 0) / angles.length;
 
-  if (angle < 95) {
+  if (angle < 115) {
     return { state: "Down", angle };
   }
-  if (angle > 155) {
+  if (angle > 160) {
     return { state: "Up", angle };
   }
   return { state: "Moving", angle };
 }
 
-function trackPushup(stateInfo) {
+function trackSquat(stateInfo) {
   formState.textContent = stateInfo.state;
   gameState.currentAngle = stateInfo.angle;
 
@@ -328,7 +377,7 @@ function trackPushup(stateInfo) {
   if (
     stateInfo.state === "Up" &&
     gameState.repPhase === "down" &&
-    now - gameState.lastRepAt > 650
+    now - gameState.lastRepAt > 700
   ) {
     gameState.lastRepAt = now;
     gameState.repPhase = "up";
@@ -371,12 +420,12 @@ async function predictLoop() {
     drawPose(result);
 
     if (result.landmarks?.[0]) {
-      const stateInfo = estimatePushupState(result.landmarks[0]);
-      trackPushup(stateInfo);
+      const stateInfo = estimateSquatState(result.landmarks[0]);
+      trackSquat(stateInfo);
       poseStatus.textContent =
         stateInfo.angle == null
           ? "Find a full side view"
-          : `${stateInfo.state} | elbow angle ${Math.round(stateInfo.angle)} deg`;
+          : `${stateInfo.state} | knee angle ${Math.round(stateInfo.angle)} deg`;
     } else {
       formState.textContent = "Searching";
       poseStatus.textContent = "Searching for your pose";
@@ -391,6 +440,7 @@ function renderStats() {
     gameState.mode === "single"
       ? String(gameState.singleStageReps)
       : String(gameState.totalReps);
+  hudLiveCount.textContent = liveCount.textContent;
 
   stageValue.textContent =
     gameState.mode === "single"
@@ -401,6 +451,7 @@ function renderStats() {
     gameState.mode === "single"
       ? `${gameState.currentTarget} reps`
       : `${gameState.versus.timeLeft}s`;
+  hudTarget.textContent = targetValue.textContent;
 
   roundLabel.textContent =
     gameState.mode === "single"
