@@ -3,6 +3,7 @@ import {
   FilesetResolver,
   DrawingUtils
 } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const video = document.getElementById("video");
 const canvas = document.getElementById("overlay");
@@ -54,12 +55,16 @@ const gameState = {
   lastRepAt: 0,
   currentAngle: null,
   remote: {
+    enabled: false,
+    ready: false,
+    client: null,
+    subscription: null,
     playerId: "",
     playerSlot: 0,
     roomCode: "",
-    stream: null,
     snapshot: null,
-    scoreSent: 0
+    scoreSent: 0,
+    finalizing: false
   }
 };
 
@@ -107,19 +112,22 @@ function speakCount(value) {
   window.speechSynthesis.speak(utterance);
 }
 
-function resetRemoteState() {
-  if (gameState.remote.stream) {
-    gameState.remote.stream.close();
+function unsubscribeRemoteRoom() {
+  if (gameState.remote.subscription && gameState.remote.client) {
+    gameState.remote.client.removeChannel(gameState.remote.subscription);
   }
 
-  gameState.remote = {
-    playerId: "",
-    playerSlot: 0,
-    roomCode: "",
-    stream: null,
-    snapshot: null,
-    scoreSent: 0
-  };
+  gameState.remote.subscription = null;
+}
+
+function resetRemoteState() {
+  unsubscribeRemoteRoom();
+  gameState.remote.playerId = "";
+  gameState.remote.playerSlot = 0;
+  gameState.remote.roomCode = "";
+  gameState.remote.snapshot = null;
+  gameState.remote.scoreSent = 0;
+  gameState.remote.finalizing = false;
 }
 
 function clearGameplayCounters() {
@@ -135,29 +143,65 @@ function clearGameplayCounters() {
   countBurst.textContent = "0";
 }
 
-function getRemotePlayers() {
-  return gameState.remote.snapshot?.players ?? [
+function makeRemotePlayers(snapshot) {
+  return snapshot?.players ?? [
     { name: "Player 1", score: 0, connected: false },
     { name: "Player 2", score: 0, connected: false }
   ];
 }
 
-function getRemoteTimeLeftMs() {
+function getRemoteSnapshot() {
   const snapshot = gameState.remote.snapshot;
+  if (!snapshot) {
+    return null;
+  }
+
+  if (snapshot.status !== "live" || !snapshot.startedAt) {
+    return snapshot;
+  }
+
+  const elapsedMs = Date.now() - snapshot.startedAt;
+  const remainingMs = Math.max(0, snapshot.matchDurationMs - elapsedMs);
+  if (remainingMs > 0) {
+    return {
+      ...snapshot,
+      timeLeftMs: remainingMs
+    };
+  }
+
+  const players = makeRemotePlayers(snapshot);
+  return {
+    ...snapshot,
+    status: "finished",
+    timeLeftMs: 0,
+    winnerSlot:
+      players[0].score === players[1].score
+        ? 0
+        : players[0].score > players[1].score
+          ? 1
+          : 2
+  };
+}
+
+function getRemotePlayers() {
+  return makeRemotePlayers(getRemoteSnapshot());
+}
+
+function getRemoteTimeLeftMs() {
+  const snapshot = getRemoteSnapshot();
   if (!snapshot) {
     return MATCH_SECONDS * 1000;
   }
 
-  if (snapshot.status !== "live" || !snapshot.startedAt) {
-    return snapshot.matchDurationMs ?? MATCH_SECONDS * 1000;
-  }
-
-  const elapsedMs = Date.now() - snapshot.startedAt;
-  return Math.max(0, (snapshot.matchDurationMs ?? MATCH_SECONDS * 1000) - elapsedMs);
+  return snapshot.timeLeftMs ?? MATCH_SECONDS * 1000;
 }
 
 function getRemoteStatusLine() {
-  const snapshot = gameState.remote.snapshot;
+  if (!gameState.remote.enabled) {
+    return "Online mode is available after Supabase and Vercel environment variables are set.";
+  }
+
+  const snapshot = getRemoteSnapshot();
   if (!snapshot || !gameState.remote.roomCode) {
     return "Create a room on one phone, share the code, then have the second player join from their own phone.";
   }
@@ -196,18 +240,25 @@ function updateRoomUi() {
     ? `Player ${gameState.remote.playerSlot}`
     : "Not Joined";
 
-  const snapshot = gameState.remote.snapshot;
-  roomStatusBadge.textContent = snapshot?.status
-    ? snapshot.status[0].toUpperCase() + snapshot.status.slice(1)
-    : "No Room";
+  const snapshot = getRemoteSnapshot();
+  roomStatusBadge.textContent = !gameState.remote.enabled
+    ? "Setup Needed"
+    : snapshot?.status
+      ? snapshot.status[0].toUpperCase() + snapshot.status.slice(1)
+      : "No Room";
   roomHelpText.textContent = getRemoteStatusLine();
 
   const canStart =
+    gameState.remote.enabled &&
     snapshot &&
     snapshot.status === "lobby" &&
     snapshot.players.every((player) => player.name);
-  const canReset = Boolean(snapshot);
+  const canReset = gameState.remote.enabled && Boolean(snapshot);
+  const canCreateOrJoin = gameState.remote.enabled;
 
+  createRoomBtn.disabled = !canCreateOrJoin;
+  joinRoomBtn.disabled = !canCreateOrJoin;
+  roomCodeInput.disabled = !canCreateOrJoin;
   startRemoteMatchBtn.disabled = !canStart;
   resetRemoteMatchBtn.disabled = !canReset;
 }
@@ -269,53 +320,117 @@ async function apiRequest(pathname, options = {}) {
   return data;
 }
 
+function toRoomSnapshot(row) {
+  const players = [
+    {
+      id: row.player1_id,
+      slot: 1,
+      name: row.player1_name || "",
+      score: Number(row.player1_score || 0),
+      connected: Boolean(row.player1_name)
+    },
+    {
+      id: row.player2_id,
+      slot: 2,
+      name: row.player2_name || "",
+      score: Number(row.player2_score || 0),
+      connected: Boolean(row.player2_name)
+    }
+  ];
+
+  const now = Date.now();
+  const startedAt = row.started_at ? new Date(row.started_at).getTime() : null;
+  const matchDurationMs = Number(row.match_duration_ms || MATCH_SECONDS * 1000);
+  const elapsedMs = startedAt ? Math.max(0, now - startedAt) : 0;
+  const timeLeftMs = startedAt
+    ? Math.max(0, matchDurationMs - elapsedMs)
+    : matchDurationMs;
+
+  return {
+    code: row.code,
+    status: row.status,
+    startedAt,
+    matchDurationMs,
+    timeLeftMs,
+    players,
+    winnerSlot:
+      row.status === "finished"
+        ? players[0].score === players[1].score
+          ? 0
+          : players[0].score > players[1].score
+            ? 1
+            : 2
+        : 0
+  };
+}
+
 function applyRemoteSnapshot(snapshot) {
+  const previousSnapshot = getRemoteSnapshot();
   gameState.remote.snapshot = snapshot;
+  const effectiveSnapshot = getRemoteSnapshot();
 
   if (gameState.mode !== "versus") {
     return;
   }
 
-  if (snapshot.status === "live") {
-    if (!gameState.running) {
+  if (effectiveSnapshot?.status === "live") {
+    if (previousSnapshot?.status !== "live") {
       gameState.totalReps = 0;
       gameState.remote.scoreSent = 0;
+      gameState.repPhase = "up";
+      gameState.lastRepAt = 0;
     }
     gameState.running = true;
   } else {
+    if (effectiveSnapshot?.status === "lobby") {
+      gameState.totalReps = 0;
+      gameState.remote.scoreSent = 0;
+    }
     gameState.running = false;
   }
 
   renderStats();
+  maybeFinalizeRemoteMatch(true);
 }
 
-function connectRoomStream() {
-  if (!gameState.remote.roomCode || !gameState.remote.playerId) {
+function subscribeToRoom() {
+  if (!gameState.remote.client || !gameState.remote.roomCode) {
     return;
   }
 
-  if (gameState.remote.stream) {
-    gameState.remote.stream.close();
-  }
+  unsubscribeRemoteRoom();
 
-  const stream = new EventSource(
-    `/api/rooms/${gameState.remote.roomCode}/events?playerId=${encodeURIComponent(gameState.remote.playerId)}`
-  );
+  const subscription = gameState.remote.client
+    .channel(`room:${gameState.remote.roomCode}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "rooms",
+        filter: `code=eq.${gameState.remote.roomCode}`
+      },
+      (payload) => {
+        if (payload.new) {
+          applyRemoteSnapshot(toRoomSnapshot(payload.new));
+        }
+      }
+    )
+    .subscribe((status) => {
+      if (status === "CHANNEL_ERROR") {
+        roomHelpText.textContent = "Realtime connection dropped. Refresh to reconnect to the room.";
+      }
+    });
 
-  stream.onmessage = (event) => {
-    const snapshot = JSON.parse(event.data);
-    applyRemoteSnapshot(snapshot);
-  };
-
-  stream.onerror = () => {
-    roomHelpText.textContent = "Realtime connection dropped. Trying to reconnect...";
-  };
-
-  gameState.remote.stream = stream;
+  gameState.remote.subscription = subscription;
 }
 
 async function createRoom() {
-  const payload = await apiRequest("/api/rooms/create", {
+  if (!gameState.remote.enabled) {
+    throw new Error("Online mode is not configured yet.");
+  }
+
+  const payload = await apiRequest("/api/create-room", {
     method: "POST",
     body: { name: "Player 1" }
   });
@@ -326,18 +441,22 @@ async function createRoom() {
   gameState.remote.snapshot = payload.room;
   gameState.remote.scoreSent = 0;
   roomCodeInput.value = payload.room.code;
-  connectRoomStream();
+  subscribeToRoom();
   renderStats();
 }
 
 async function joinRoom() {
+  if (!gameState.remote.enabled) {
+    throw new Error("Online mode is not configured yet.");
+  }
+
   const code = roomCodeInput.value.trim().toUpperCase();
   if (!code) {
     roomHelpText.textContent = "Enter the room code from Player 1.";
     return;
   }
 
-  const payload = await apiRequest("/api/rooms/join", {
+  const payload = await apiRequest("/api/join-room", {
     method: "POST",
     body: { code, name: "Player 2" }
   });
@@ -348,7 +467,7 @@ async function joinRoom() {
   gameState.remote.snapshot = payload.room;
   gameState.remote.scoreSent = 0;
   roomCodeInput.value = payload.room.code;
-  connectRoomStream();
+  subscribeToRoom();
   renderStats();
 }
 
@@ -358,9 +477,12 @@ async function startRemoteMatch() {
     return;
   }
 
-  const payload = await apiRequest(`/api/rooms/${gameState.remote.roomCode}/start`, {
+  const payload = await apiRequest("/api/start-match", {
     method: "POST",
-    body: { playerId: gameState.remote.playerId }
+    body: {
+      code: gameState.remote.roomCode,
+      playerId: gameState.remote.playerId
+    }
   });
 
   gameState.totalReps = 0;
@@ -375,31 +497,71 @@ async function resetRemoteMatch() {
     return;
   }
 
-  const payload = await apiRequest(`/api/rooms/${gameState.remote.roomCode}/reset`, {
+  const payload = await apiRequest("/api/reset-match", {
     method: "POST",
-    body: { playerId: gameState.remote.playerId }
+    body: {
+      code: gameState.remote.roomCode,
+      playerId: gameState.remote.playerId
+    }
   });
 
   gameState.totalReps = 0;
   gameState.remote.scoreSent = 0;
+  gameState.remote.finalizing = false;
   applyRemoteSnapshot(payload.room);
 }
 
+async function maybeFinalizeRemoteMatch(silent = false) {
+  const snapshot = getRemoteSnapshot();
+  if (
+    !gameState.remote.enabled ||
+    !snapshot ||
+    snapshot.status !== "finished" ||
+    !gameState.remote.roomCode ||
+    !gameState.remote.playerId ||
+    gameState.remote.finalizing
+  ) {
+    return;
+  }
+
+  gameState.remote.finalizing = true;
+
+  try {
+    const payload = await apiRequest("/api/finalize-match", {
+      method: "POST",
+      body: {
+        code: gameState.remote.roomCode,
+        playerId: gameState.remote.playerId
+      }
+    });
+    gameState.remote.snapshot = payload.room;
+    renderStats();
+  } catch (error) {
+    if (!silent) {
+      roomHelpText.textContent = error.message;
+    }
+  } finally {
+    gameState.remote.finalizing = false;
+  }
+}
+
 async function syncRemoteScore() {
+  const snapshot = getRemoteSnapshot();
   if (
     gameState.mode !== "versus" ||
     !gameState.remote.roomCode ||
     !gameState.remote.playerId ||
     gameState.remote.scoreSent === gameState.totalReps ||
-    gameState.remote.snapshot?.status !== "live"
+    snapshot?.status !== "live"
   ) {
     return;
   }
 
   gameState.remote.scoreSent = gameState.totalReps;
-  await apiRequest(`/api/rooms/${gameState.remote.roomCode}/score`, {
+  await apiRequest("/api/update-score", {
     method: "POST",
     body: {
+      code: gameState.remote.roomCode,
       playerId: gameState.remote.playerId,
       score: gameState.totalReps
     }
@@ -407,6 +569,33 @@ async function syncRemoteScore() {
     roomHelpText.textContent = "Could not send your score update. We will try again on the next rep.";
     gameState.remote.scoreSent = Math.max(0, gameState.totalReps - 1);
   });
+}
+
+async function loadOnlineConfig() {
+  try {
+    const config = await apiRequest("/api/config");
+    if (!config.enabled || !config.supabaseUrl || !config.supabaseAnonKey) {
+      gameState.remote.enabled = false;
+      gameState.remote.ready = true;
+      renderStats();
+      return;
+    }
+
+    gameState.remote.client = createClient(config.supabaseUrl, config.supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      }
+    });
+    gameState.remote.enabled = true;
+    gameState.remote.ready = true;
+    renderStats();
+  } catch (error) {
+    console.error(error);
+    gameState.remote.enabled = false;
+    gameState.remote.ready = true;
+    renderStats();
+  }
 }
 
 async function setupPoseLandmarker() {
@@ -507,8 +696,9 @@ function setMode(mode) {
     roundLabel.textContent = "Solo Run";
   } else {
     modeLabel.textContent = "2 Players";
-    modeHelp.textContent =
-      "Two phones join the same room and race live for 60 seconds.";
+    modeHelp.textContent = gameState.remote.enabled
+      ? "Two phones can join the same room from anywhere and race live for 60 seconds."
+      : "Online mode appears here after the Vercel and Supabase setup is connected.";
     roundLabel.textContent = "Online Battle";
   }
 
@@ -721,6 +911,7 @@ resetRemoteMatchBtn.addEventListener("click", async () => {
 window.addEventListener("resize", resizeCanvas);
 
 renderStats();
+loadOnlineConfig();
 setupPoseLandmarker().catch((error) => {
   console.error(error);
   poseStatus.textContent = "Pose model failed to load";
