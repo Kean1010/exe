@@ -12,6 +12,16 @@ const countBurst = document.getElementById("countBurst");
 const startCameraBtn = document.getElementById("startCameraBtn");
 const switchCameraBtn = document.getElementById("switchCameraBtn");
 const modeButtons = [...document.querySelectorAll(".mode-btn")];
+const remoteRoomCard = document.getElementById("remoteRoomCard");
+const createRoomBtn = document.getElementById("createRoomBtn");
+const joinRoomBtn = document.getElementById("joinRoomBtn");
+const roomCodeInput = document.getElementById("roomCodeInput");
+const roomCodeValue = document.getElementById("roomCodeValue");
+const playerSlotLabel = document.getElementById("playerSlotLabel");
+const roomStatusBadge = document.getElementById("roomStatusBadge");
+const roomHelpText = document.getElementById("roomHelpText");
+const startRemoteMatchBtn = document.getElementById("startRemoteMatchBtn");
+const resetRemoteMatchBtn = document.getElementById("resetRemoteMatchBtn");
 
 const cameraStatus = document.getElementById("cameraStatus");
 const poseStatus = document.getElementById("poseStatus");
@@ -43,12 +53,13 @@ const gameState = {
   repPhase: "up",
   lastRepAt: 0,
   currentAngle: null,
-  versus: {
-    currentPlayer: 1,
-    scores: [0, 0],
-    timeLeft: MATCH_SECONDS,
-    timerId: null,
-    awaitingNextTurn: false
+  remote: {
+    playerId: "",
+    playerSlot: 0,
+    roomCode: "",
+    stream: null,
+    snapshot: null,
+    scoreSent: 0
   }
 };
 
@@ -96,6 +107,308 @@ function speakCount(value) {
   window.speechSynthesis.speak(utterance);
 }
 
+function resetRemoteState() {
+  if (gameState.remote.stream) {
+    gameState.remote.stream.close();
+  }
+
+  gameState.remote = {
+    playerId: "",
+    playerSlot: 0,
+    roomCode: "",
+    stream: null,
+    snapshot: null,
+    scoreSent: 0
+  };
+}
+
+function clearGameplayCounters() {
+  gameState.running = false;
+  gameState.totalReps = 0;
+  gameState.stage = 1;
+  gameState.singleStageReps = 0;
+  gameState.currentTarget = STAGE_START;
+  gameState.repPhase = "up";
+  gameState.lastRepAt = 0;
+  gameState.currentAngle = null;
+  countBurst.classList.remove("active");
+  countBurst.textContent = "0";
+}
+
+function getRemotePlayers() {
+  return gameState.remote.snapshot?.players ?? [
+    { name: "Player 1", score: 0, connected: false },
+    { name: "Player 2", score: 0, connected: false }
+  ];
+}
+
+function getRemoteTimeLeftMs() {
+  const snapshot = gameState.remote.snapshot;
+  if (!snapshot) {
+    return MATCH_SECONDS * 1000;
+  }
+
+  if (snapshot.status !== "live" || !snapshot.startedAt) {
+    return snapshot.matchDurationMs ?? MATCH_SECONDS * 1000;
+  }
+
+  const elapsedMs = Date.now() - snapshot.startedAt;
+  return Math.max(0, (snapshot.matchDurationMs ?? MATCH_SECONDS * 1000) - elapsedMs);
+}
+
+function getRemoteStatusLine() {
+  const snapshot = gameState.remote.snapshot;
+  if (!snapshot || !gameState.remote.roomCode) {
+    return "Create a room on one phone, share the code, then have the second player join from their own phone.";
+  }
+
+  if (snapshot.status === "lobby") {
+    return snapshot.players[1]?.name
+      ? "Both players are in. Start the online match when you are ready."
+      : "Room created. Share the code so Player 2 can join.";
+  }
+
+  if (snapshot.status === "live") {
+    return "Match is live on both phones. Keep squatting until the timer hits zero.";
+  }
+
+  if (snapshot.status === "finished") {
+    if (snapshot.winnerSlot === 0) {
+      return "The online match ended in a tie.";
+    }
+
+    return `Player ${snapshot.winnerSlot} wins the online match.`;
+  }
+
+  return "Online match ready.";
+}
+
+function updateRoomUi() {
+  const remoteActive = gameState.mode === "versus";
+  remoteRoomCard.hidden = !remoteActive;
+
+  if (!remoteActive) {
+    return;
+  }
+
+  roomCodeValue.textContent = gameState.remote.roomCode || "-----";
+  playerSlotLabel.textContent = gameState.remote.playerSlot
+    ? `Player ${gameState.remote.playerSlot}`
+    : "Not Joined";
+
+  const snapshot = gameState.remote.snapshot;
+  roomStatusBadge.textContent = snapshot?.status
+    ? snapshot.status[0].toUpperCase() + snapshot.status.slice(1)
+    : "No Room";
+  roomHelpText.textContent = getRemoteStatusLine();
+
+  const canStart =
+    snapshot &&
+    snapshot.status === "lobby" &&
+    snapshot.players.every((player) => player.name);
+  const canReset = Boolean(snapshot);
+
+  startRemoteMatchBtn.disabled = !canStart;
+  resetRemoteMatchBtn.disabled = !canReset;
+}
+
+function renderStats() {
+  if (gameState.mode === "single") {
+    liveCount.textContent = String(gameState.singleStageReps);
+    hudLiveCount.textContent = liveCount.textContent;
+    stageValue.textContent = String(gameState.stage);
+    targetValue.textContent = `${gameState.currentTarget} reps`;
+    hudTarget.textContent = targetValue.textContent;
+    roundLabel.textContent = "Solo Run";
+  } else {
+    const remotePlayers = getRemotePlayers();
+    const timeLeftMs = getRemoteTimeLeftMs();
+    const localScore = gameState.totalReps;
+
+    liveCount.textContent = String(localScore);
+    hudLiveCount.textContent = liveCount.textContent;
+    stageValue.textContent = gameState.remote.playerSlot
+      ? `P${gameState.remote.playerSlot}`
+      : "Room";
+    targetValue.textContent = `${Math.ceil(timeLeftMs / 1000)}s`;
+    hudTarget.textContent = targetValue.textContent;
+    roundLabel.textContent = gameState.remote.roomCode
+      ? `Room ${gameState.remote.roomCode}`
+      : "Online Battle";
+    player1Score.textContent = String(remotePlayers[0]?.score ?? 0);
+    player2Score.textContent = String(remotePlayers[1]?.score ?? 0);
+    statusText.textContent = getRemoteStatusLine();
+  }
+
+  if (gameState.mode === "single") {
+    player1Score.textContent = "0";
+    player2Score.textContent = "0";
+    statusText.textContent =
+      gameState.running
+        ? `Stage ${gameState.stage} is running. Reach ${gameState.currentTarget} squats.`
+        : "Start the camera, line up sideways, and the game will begin automatically.";
+  }
+
+  updateRoomUi();
+}
+
+async function apiRequest(pathname, options = {}) {
+  const response = await fetch(pathname, {
+    method: options.method || "GET",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || "Request failed");
+  }
+
+  return data;
+}
+
+function applyRemoteSnapshot(snapshot) {
+  gameState.remote.snapshot = snapshot;
+
+  if (gameState.mode !== "versus") {
+    return;
+  }
+
+  if (snapshot.status === "live") {
+    if (!gameState.running) {
+      gameState.totalReps = 0;
+      gameState.remote.scoreSent = 0;
+    }
+    gameState.running = true;
+  } else {
+    gameState.running = false;
+  }
+
+  renderStats();
+}
+
+function connectRoomStream() {
+  if (!gameState.remote.roomCode || !gameState.remote.playerId) {
+    return;
+  }
+
+  if (gameState.remote.stream) {
+    gameState.remote.stream.close();
+  }
+
+  const stream = new EventSource(
+    `/api/rooms/${gameState.remote.roomCode}/events?playerId=${encodeURIComponent(gameState.remote.playerId)}`
+  );
+
+  stream.onmessage = (event) => {
+    const snapshot = JSON.parse(event.data);
+    applyRemoteSnapshot(snapshot);
+  };
+
+  stream.onerror = () => {
+    roomHelpText.textContent = "Realtime connection dropped. Trying to reconnect...";
+  };
+
+  gameState.remote.stream = stream;
+}
+
+async function createRoom() {
+  const payload = await apiRequest("/api/rooms/create", {
+    method: "POST",
+    body: { name: "Player 1" }
+  });
+
+  gameState.remote.playerId = payload.playerId;
+  gameState.remote.playerSlot = payload.playerSlot;
+  gameState.remote.roomCode = payload.room.code;
+  gameState.remote.snapshot = payload.room;
+  gameState.remote.scoreSent = 0;
+  roomCodeInput.value = payload.room.code;
+  connectRoomStream();
+  renderStats();
+}
+
+async function joinRoom() {
+  const code = roomCodeInput.value.trim().toUpperCase();
+  if (!code) {
+    roomHelpText.textContent = "Enter the room code from Player 1.";
+    return;
+  }
+
+  const payload = await apiRequest("/api/rooms/join", {
+    method: "POST",
+    body: { code, name: "Player 2" }
+  });
+
+  gameState.remote.playerId = payload.playerId;
+  gameState.remote.playerSlot = payload.playerSlot;
+  gameState.remote.roomCode = payload.room.code;
+  gameState.remote.snapshot = payload.room;
+  gameState.remote.scoreSent = 0;
+  roomCodeInput.value = payload.room.code;
+  connectRoomStream();
+  renderStats();
+}
+
+async function startRemoteMatch() {
+  if (!gameState.remote.roomCode || !gameState.remote.playerId) {
+    roomHelpText.textContent = "Create or join a room first.";
+    return;
+  }
+
+  const payload = await apiRequest(`/api/rooms/${gameState.remote.roomCode}/start`, {
+    method: "POST",
+    body: { playerId: gameState.remote.playerId }
+  });
+
+  gameState.totalReps = 0;
+  gameState.remote.scoreSent = 0;
+  applyRemoteSnapshot(payload.room);
+}
+
+async function resetRemoteMatch() {
+  if (!gameState.remote.roomCode || !gameState.remote.playerId) {
+    resetRemoteState();
+    renderStats();
+    return;
+  }
+
+  const payload = await apiRequest(`/api/rooms/${gameState.remote.roomCode}/reset`, {
+    method: "POST",
+    body: { playerId: gameState.remote.playerId }
+  });
+
+  gameState.totalReps = 0;
+  gameState.remote.scoreSent = 0;
+  applyRemoteSnapshot(payload.room);
+}
+
+async function syncRemoteScore() {
+  if (
+    gameState.mode !== "versus" ||
+    !gameState.remote.roomCode ||
+    !gameState.remote.playerId ||
+    gameState.remote.scoreSent === gameState.totalReps ||
+    gameState.remote.snapshot?.status !== "live"
+  ) {
+    return;
+  }
+
+  gameState.remote.scoreSent = gameState.totalReps;
+  await apiRequest(`/api/rooms/${gameState.remote.roomCode}/score`, {
+    method: "POST",
+    body: {
+      playerId: gameState.remote.playerId,
+      score: gameState.totalReps
+    }
+  }).catch(() => {
+    roomHelpText.textContent = "Could not send your score update. We will try again on the next rep.";
+    gameState.remote.scoreSent = Math.max(0, gameState.totalReps - 1);
+  });
+}
+
 async function setupPoseLandmarker() {
   poseStatus.textContent = "Loading pose model...";
 
@@ -140,12 +453,16 @@ async function startCamera() {
     resizeCanvas();
     cameraStatus.textContent =
       gameState.facingMode === "user" ? "Front camera live" : "Rear camera live";
-    resetGame();
-    gameState.running = true;
-    statusText.textContent =
-      gameState.mode === "single"
-        ? `Camera is live. Stage ${gameState.stage} is running.`
-        : `Camera is live. Player ${gameState.versus.currentPlayer} is running.`;
+
+    clearGameplayCounters();
+    if (gameState.mode === "single") {
+      gameState.running = true;
+      statusText.textContent = `Camera is live. Stage ${gameState.stage} is running.`;
+    } else {
+      statusText.textContent = getRemoteStatusLine();
+    }
+
+    renderStats();
 
     if (!animationFrameId) {
       predictLoop();
@@ -174,6 +491,10 @@ function resizeCanvas() {
 }
 
 function setMode(mode) {
+  if (gameState.mode === "versus" && mode !== "versus") {
+    resetRemoteState();
+  }
+
   gameState.mode = mode;
   modeButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.mode === mode);
@@ -187,139 +508,12 @@ function setMode(mode) {
   } else {
     modeLabel.textContent = "2 Players";
     modeHelp.textContent =
-      "Player 1 and Player 2 take 60-second turns. Highest squat count wins.";
-    roundLabel.textContent = "Battle Mode";
+      "Two phones join the same room and race live for 60 seconds.";
+    roundLabel.textContent = "Online Battle";
   }
 
-  resetGame();
-}
-
-function startGame() {
-  if (!stream) {
-    statusText.textContent = "Start the camera first so we can track your reps.";
-    return;
-  }
-
-  if ("speechSynthesis" in window) {
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.getVoices();
-  }
-
-  gameState.running = true;
-  gameState.repPhase = "up";
-  gameState.lastRepAt = 0;
-
-  if (gameState.mode === "single") {
-    statusText.textContent = `Stage ${gameState.stage} started. Target: ${gameState.currentTarget} squats.`;
-  } else {
-    if (gameState.versus.awaitingNextTurn) {
-      gameState.versus.awaitingNextTurn = false;
-    }
-
-    if (!gameState.versus.timerId) {
-      beginVersusTimer();
-    }
-
-    statusText.textContent = `Player ${gameState.versus.currentPlayer}, go all out for 60 seconds.`;
-  }
-
+  clearGameplayCounters();
   renderStats();
-}
-
-function beginVersusTimer() {
-  clearInterval(gameState.versus.timerId);
-  gameState.versus.timeLeft = MATCH_SECONDS;
-
-  gameState.versus.timerId = setInterval(() => {
-    gameState.versus.timeLeft -= 1;
-    renderStats();
-
-    if (gameState.versus.timeLeft <= 0) {
-      clearInterval(gameState.versus.timerId);
-      gameState.versus.timerId = null;
-      endCurrentTurn();
-    }
-  }, 1000);
-}
-
-function endCurrentTurn() {
-  gameState.running = false;
-
-  if (gameState.versus.currentPlayer === 1) {
-    gameState.versus.currentPlayer = 2;
-    gameState.versus.awaitingNextTurn = true;
-    gameState.totalReps = 0;
-    liveCount.textContent = "0";
-    statusText.textContent = "Player 1 finished. Hand the phone over and Player 2 can continue.";
-  } else {
-    const [score1, score2] = gameState.versus.scores;
-    const winnerText =
-      score1 === score2
-        ? "It is a tie. Both players crushed it."
-        : score1 > score2
-          ? "Player 1 wins the match."
-          : "Player 2 wins the match.";
-
-    statusText.textContent = `Match complete. ${winnerText}`;
-  }
-
-  renderStats();
-}
-
-function resetGame() {
-  gameState.running = false;
-  gameState.totalReps = 0;
-  gameState.stage = 1;
-  gameState.singleStageReps = 0;
-  gameState.currentTarget = STAGE_START;
-  gameState.repPhase = "up";
-  gameState.lastRepAt = 0;
-  gameState.currentAngle = null;
-  countBurst.classList.remove("active");
-  countBurst.textContent = "0";
-
-  if ("speechSynthesis" in window) {
-    window.speechSynthesis.cancel();
-  }
-
-  clearInterval(gameState.versus.timerId);
-  gameState.versus = {
-    currentPlayer: 1,
-    scores: [0, 0],
-    timeLeft: MATCH_SECONDS,
-    timerId: null,
-    awaitingNextTurn: false
-  };
-
-  statusText.textContent =
-    gameState.mode === "single"
-      ? "Single-player run reset. Start the camera when you're ready."
-      : "2-player match reset. Start the camera and Player 1 goes first.";
-
-  renderStats();
-}
-
-function registerRep() {
-  gameState.totalReps += 1;
-
-  if (gameState.mode === "single") {
-    gameState.singleStageReps += 1;
-
-    if (gameState.singleStageReps >= gameState.currentTarget) {
-      gameState.stage += 1;
-      gameState.singleStageReps = 0;
-      gameState.currentTarget = STAGE_START + (gameState.stage - 1) * STAGE_STEP;
-      statusText.textContent = `Stage cleared. Welcome to Stage ${gameState.stage}. New target: ${gameState.currentTarget}.`;
-    }
-  } else {
-    const playerIndex = gameState.versus.currentPlayer - 1;
-    gameState.versus.scores[playerIndex] += 1;
-  }
-
-  renderStats();
-  const displayCount = getDisplayedCount();
-  flashCountOverlay(displayCount);
-  speakCount(displayCount);
 }
 
 function calculateAngle(a, b, c) {
@@ -403,6 +597,27 @@ function trackSquat(stateInfo) {
   }
 }
 
+function registerRep() {
+  gameState.totalReps += 1;
+
+  if (gameState.mode === "single") {
+    gameState.singleStageReps += 1;
+
+    if (gameState.singleStageReps >= gameState.currentTarget) {
+      gameState.stage += 1;
+      gameState.singleStageReps = 0;
+      gameState.currentTarget = STAGE_START + (gameState.stage - 1) * STAGE_STEP;
+      statusText.textContent = `Stage cleared. Welcome to Stage ${gameState.stage}. New target: ${gameState.currentTarget}.`;
+    }
+  }
+
+  renderStats();
+  const displayCount = getDisplayedCount();
+  flashCountOverlay(displayCount);
+  speakCount(displayCount);
+  syncRemoteScore();
+}
+
 function drawPose(result) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -461,33 +676,6 @@ async function predictLoop() {
   animationFrameId = requestAnimationFrame(predictLoop);
 }
 
-function renderStats() {
-  liveCount.textContent =
-    gameState.mode === "single"
-      ? String(gameState.singleStageReps)
-      : String(gameState.totalReps);
-  hudLiveCount.textContent = liveCount.textContent;
-
-  stageValue.textContent =
-    gameState.mode === "single"
-      ? String(gameState.stage)
-      : `P${gameState.versus.currentPlayer}`;
-
-  targetValue.textContent =
-    gameState.mode === "single"
-      ? `${gameState.currentTarget} reps`
-      : `${gameState.versus.timeLeft}s`;
-  hudTarget.textContent = targetValue.textContent;
-
-  roundLabel.textContent =
-    gameState.mode === "single"
-      ? "Solo Run"
-      : `Player ${gameState.versus.currentPlayer} Turn`;
-
-  player1Score.textContent = String(gameState.versus.scores[0]);
-  player2Score.textContent = String(gameState.versus.scores[1]);
-}
-
 startCameraBtn.addEventListener("click", startCamera);
 switchCameraBtn.addEventListener("click", async () => {
   gameState.facingMode = gameState.facingMode === "user" ? "environment" : "user";
@@ -496,6 +684,38 @@ switchCameraBtn.addEventListener("click", async () => {
 
 modeButtons.forEach((button) => {
   button.addEventListener("click", () => setMode(button.dataset.mode));
+});
+
+createRoomBtn.addEventListener("click", async () => {
+  try {
+    await createRoom();
+  } catch (error) {
+    roomHelpText.textContent = error.message;
+  }
+});
+
+joinRoomBtn.addEventListener("click", async () => {
+  try {
+    await joinRoom();
+  } catch (error) {
+    roomHelpText.textContent = error.message;
+  }
+});
+
+startRemoteMatchBtn.addEventListener("click", async () => {
+  try {
+    await startRemoteMatch();
+  } catch (error) {
+    roomHelpText.textContent = error.message;
+  }
+});
+
+resetRemoteMatchBtn.addEventListener("click", async () => {
+  try {
+    await resetRemoteMatch();
+  } catch (error) {
+    roomHelpText.textContent = error.message;
+  }
 });
 
 window.addEventListener("resize", resizeCanvas);

@@ -65,6 +65,37 @@
           </p>
         </div>
 
+        <div class="card remote-room-card" id="remoteRoomCard" hidden>
+          <div class="card-header">
+            <h2>Online Match</h2>
+            <span id="roomStatusBadge">No Room</span>
+          </div>
+          <div class="room-actions">
+            <button id="createRoomBtn" class="primary">Create Room</button>
+            <div class="room-join">
+              <input id="roomCodeInput" type="text" maxlength="5" placeholder="ROOM" autocomplete="off">
+              <button id="joinRoomBtn" class="secondary">Join</button>
+            </div>
+          </div>
+          <div class="room-meta">
+            <div class="room-meta-box">
+              <span class="stat-label">Room Code</span>
+              <strong id="roomCodeValue">-----</strong>
+            </div>
+            <div class="room-meta-box">
+              <span class="stat-label">You Are</span>
+              <strong id="playerSlotLabel">Not Joined</strong>
+            </div>
+          </div>
+          <div class="room-actions secondary-row">
+            <button id="startRemoteMatchBtn" class="primary">Start Online Match</button>
+            <button id="resetRemoteMatchBtn" class="secondary">Reset Match</button>
+          </div>
+          <p class="helper-text" id="roomHelpText">
+            Create a room on one phone, share the code, then have the second player join from their own phone.
+          </p>
+        </div>
+
         <div class="stats-grid">
           <article class="card stat-card">
             <span class="stat-label">Live Count</span>
@@ -110,7 +141,7 @@
             <li>Place the phone where your full body is visible from the side.</li>
             <li>Keep your hips, knees, and ankles visible for better counting.</li>
             <li>Single Player: finish the target to unlock the next stage.</li>
-            <li>2 Players: each player gets 60 seconds. Highest squat count wins.</li>
+            <li>2 Players: both phones join the same room and race live for 60 seconds.</li>
           </ul>
         </div>
       </section>

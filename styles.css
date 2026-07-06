@@ -353,6 +353,46 @@ body.camera-live .controls {
   border: 1px solid rgba(94, 242, 194, 0.28);
 }
 
+.room-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.room-join {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+#roomCodeInput {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.room-meta {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.room-meta-box {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.secondary-row {
+  margin-top: 14px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
 .helper-text,
 .status-text,
 li {
@@ -465,7 +505,10 @@ li {
   .controls,
   .stats-grid,
   .mode-toggle,
-  .scoreboard {
+  .scoreboard,
+  .room-meta,
+  .secondary-row,
+  .room-join {
     grid-template-columns: 1fr;
   }
 

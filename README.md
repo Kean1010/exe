@@ -5,8 +5,9 @@ A lightweight browser app that uses your phone camera to count squats and turn t
 ## What it does
 
 - `Single Player`: starts at 10 squats for Stage 1, then increases by 5 every stage
-- `2 Players`: Player 1 gets 60 seconds, then Player 2 gets 60 seconds, and the higher score wins
+- `2 Players`: two phones can join the same room and race live for 60 seconds
 - Uses the device camera plus pose tracking to estimate squat reps in real time
+- Includes a lightweight built-in room backend for realtime online matches
 
 ## How to run
 
@@ -37,6 +38,16 @@ Then open:
 - On your phone: `http://YOUR-PC-IP:8080`
 
 Your phone and computer need to be on the same Wi-Fi network.
+
+## Online 2-player mode
+
+- For testing on one local network, run `node .\server.js` on one machine and open that machine's IP from both phones
+- For real different-location play, deploy this same app and `server.js` to a public server so both phones can reach the same URL
+- Flow:
+  - Player 1 creates a room
+  - Player 2 joins with the room code
+  - Either player starts the online match
+  - Both phones count locally and sync scores to the shared room in realtime
 
 ## Tips for better rep counting
 
