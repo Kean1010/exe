@@ -24,7 +24,7 @@ module.exports = async (req, res) => {
 
   try {
     const body = await readJson(req);
-    const code = await ensureUniqueRoomCode();
+    const code = await ensureUniqueRoomCode({ avoidPrefix: "Q" });
     const playerId = randomUuid();
 
     const rows = await supabaseRequest("rooms", {

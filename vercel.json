@@ -2,7 +2,39 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/*.js",
+      "src": "api/config.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/create-room.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/quick-match.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/heartbeat-room.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/join-room.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/start-match.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/update-score.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/reset-match.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/finalize-match.js",
       "use": "@vercel/node"
     },
     {
@@ -20,16 +52,15 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "handle": "filesystem"
     },
     {
-      "src": "/",
-      "dest": "/index.html"
+      "src": "/api/(.*)",
+      "dest": "/api/$1.js"
     },
     {
       "src": "/(.*)",
-      "dest": "/$1"
+      "dest": "/index.html"
     }
   ]
 }

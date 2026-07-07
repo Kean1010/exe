@@ -4,7 +4,7 @@
   "version": "2.0.0",
   "description": "Camera-based squat game with realtime multiplayer rooms for Vercel and Supabase.",
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "scripts": {
     "start": "node server.js"

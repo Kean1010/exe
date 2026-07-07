@@ -3,149 +3,441 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RepQuest</title>
+  <title>Ex-Battle</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <div class="app-shell">
-    <header class="hero">
-      <div>
-        <p class="eyebrow">Camera-powered workout game</p>
-        <h1>RepQuest Squat Arena</h1>
-        <p class="subcopy">
-          Use your phone camera to count squats, clear stages solo, or battle a friend in a 60-second showdown.
-        </p>
+  <div class="app-shell" id="appShell" data-screen="lobby">
+    <header class="topbar">
+      <button id="globalLobbyBtn" class="ghost mini-btn" hidden>Lobby</button>
+      <div class="brand-mark">
+        <span class="brand-kicker">Motion-Powered Combat</span>
+        <strong>Ex-Battle</strong>
       </div>
-      <div class="hero-badge">Phone Ready</div>
+      <button id="howToPlayBtn" class="ghost mini-btn">How to Play</button>
     </header>
 
-    <main class="layout">
-      <section class="video-panel">
-        <div class="video-stack">
-          <video id="video" playsinline></video>
-          <canvas id="overlay"></canvas>
-          <div class="count-burst" id="countBurst" aria-live="polite">0</div>
-          <div class="camera-overlay">
-            <div class="overlay-pill" id="cameraStatus">Camera idle</div>
-            <div class="overlay-pill accent" id="poseStatus">Pose model loading...</div>
-          </div>
-          <div class="game-hud">
-            <div class="hud-card">
-              <span class="hud-label">Live Count</span>
-              <strong id="hudLiveCount">0</strong>
+    <main>
+      <section class="screen lobby-screen active" id="lobbyScreen">
+        <div class="lobby-stage">
+          <div class="lobby-aura lobby-aura-left"></div>
+          <div class="lobby-aura lobby-aura-right"></div>
+          <div class="lobby-phone">
+            <div class="lobby-phone-notch"></div>
+            <div class="lobby-phone-screen">
+              <div class="lobby-logo-wrap">
+                <p class="lobby-kicker">Motion-Powered Combat</p>
+                <h1 class="lobby-logo">EX-BATTLE</h1>
+                <p class="lobby-tagline">Turn every squat into a stage clear or a live arena duel.</p>
+              </div>
+              <div class="hero-actions lobby-actions">
+                <button id="lobbySoloBtn" class="primary neon-btn cyan hero-btn"><span class="lobby-btn-label">Single Player</span></button>
+                <button id="lobbyBattleBtn" class="primary neon-btn split hero-btn"><span class="lobby-btn-label">Battle Mode</span></button>
+              </div>
+              <div class="lobby-profile-card">
+                <div class="profile-head">
+                  <div>
+                    <span class="stat-label">Player Profile</span>
+                    <strong id="profileName">Guest Fighter</strong>
+                    <small id="profileHint">Sign in with Google to save ranks, points, and daily rewards.</small>
+                  </div>
+                  <button id="authGoogleBtn" class="secondary mini-btn">Google Sign-In</button>
+                  <button id="authSignOutBtn" class="ghost mini-btn" hidden>Sign Out</button>
+                </div>
+                <div class="profile-rank-row">
+                  <span class="rank-badge" id="profileRankBadge">Rookie</span>
+                  <strong id="profilePoints">0 PTS</strong>
+                </div>
+                <div class="profile-stats-grid">
+                  <div class="profile-stat-box">
+                    <span class="stat-label">Total Squats</span>
+                    <strong id="profileTotalSquats">0</strong>
+                  </div>
+                  <div class="profile-stat-box">
+                    <span class="stat-label">Battle W-L</span>
+                    <strong id="profileBattleRecord">0-0</strong>
+                  </div>
+                  <div class="profile-stat-box">
+                    <span class="stat-label">Best Stage</span>
+                    <strong id="profileBestStage">1</strong>
+                  </div>
+                  <div class="profile-stat-box">
+                    <span class="stat-label">Daily Check-In</span>
+                    <strong id="profileCheckInStatus">Available</strong>
+                  </div>
+                </div>
+              <div class="profile-action-row">
+                <button id="dailyCheckInBtn" class="secondary mini-btn">Daily Check-In</button>
+                <button id="dailyChallengeBtn" class="secondary mini-btn">Daily Challenge</button>
+              </div>
+              <div class="profile-action-row profile-nav-row">
+                <button id="openProfileHubBtn" class="ghost mini-btn">Profile Hub</button>
+                <button id="openLeaderboardBtn" class="ghost mini-btn">Leaderboard</button>
+              </div>
+              <p class="helper-text" id="dailyChallengeStatus">Daily Challenge: 30 squats in 60 seconds for bonus points.</p>
             </div>
-            <div class="hud-card">
-              <span class="hud-label">Target / Timer</span>
-              <strong id="hudTarget">10 reps</strong>
+              <div class="lobby-footer-links">
+                <button class="lobby-link-btn" id="lobbyHowToPlayBtn">How to Play</button>
+                <button class="lobby-link-btn" id="lobbyTipsBtn" type="button">Camera Tips</button>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div class="controls">
-          <button id="startCameraBtn" class="primary">Start Camera</button>
-          <button id="switchCameraBtn" class="secondary">Switch Camera</button>
         </div>
       </section>
 
-      <section class="dashboard">
-        <div class="card game-mode-card">
-          <div class="card-header">
-            <h2>Game Mode</h2>
-            <span id="modeLabel">Single Player</span>
+      <section class="screen experience-screen" id="experienceScreen">
+        <aside class="setup-sidebar">
+          <button id="backToLobbySetupBtn" class="ghost back-link">Back to Lobby</button>
+          <div class="setup-headline">
+            <p class="eyebrow">Page 2</p>
+            <h2 id="setupTitle">Solo Setup</h2>
+            <p id="setupSubtitle" class="muted-copy">Calibrate your camera, choose your challenge, then step into the arena.</p>
           </div>
-          <div class="mode-toggle">
-            <button class="mode-btn active" data-mode="single">Single Player</button>
-            <button class="mode-btn" data-mode="versus">2 Players</button>
-          </div>
-          <p class="helper-text" id="modeHelp">
-            Clear stage goals. Stage 1 starts at 10 squats and every stage adds 5 more.
-          </p>
-        </div>
 
-        <div class="card remote-room-card" id="remoteRoomCard" hidden>
-          <div class="card-header">
-            <h2>Online Match</h2>
-            <span id="roomStatusBadge">No Room</span>
+          <div class="setup-cards">
+            <article class="setup-card" id="soloConfigCard">
+              <div class="card-row">
+                <h3>Solo Configuration</h3>
+                <span class="chip" id="modeLabel">Single Player</span>
+              </div>
+              <p class="helper-text" id="modeHelp">Clear stage goals. Stage 1 starts at 10 squats and every stage adds 5 more.</p>
+              <div class="solo-variant-selector" id="soloVariantSelector">
+                <button class="stage-btn active" id="soloStageModeBtn" data-variant="stages">Stage Rush</button>
+                <button class="stage-btn" id="dailyModeBtn" data-variant="daily">Daily Challenge</button>
+              </div>
+              <div class="stage-selector" id="stageSelector">
+                <button class="stage-btn active" data-stage="1">Level 1</button>
+                <button class="stage-btn" data-stage="2">Level 2</button>
+                <button class="stage-btn" data-stage="3">Level 3</button>
+                <button class="stage-btn" data-stage="4">Level 4</button>
+              </div>
+              <div class="goal-card">
+                <span class="stat-label">Goal Type</span>
+                <strong id="soloGoalTitle">Squat Rush</strong>
+                <small id="soloTargetPreview">Start at 10 reps and climb by 5 each stage.</small>
+              </div>
+            </article>
+
+            <article class="setup-card" id="battleConfigCard" hidden>
+              <div class="card-row">
+                <h3>Battle Configuration</h3>
+                <span class="chip danger" id="roomStatusBadge">No Room</span>
+              </div>
+              <div class="quick-match-box">
+                <div class="quick-match-text">
+                  <span class="stat-label">Quick Match</span>
+                  <strong id="quickMatchStatus">Searching for opponent...</strong>
+                </div>
+                <button id="privateMatchToggleBtn" class="secondary mini-btn">Private Room</button>
+              </div>
+              <div class="room-actions" id="privateMatchPanel" hidden>
+                <button id="createRoomBtn" class="primary">Create Private Room</button>
+                <div class="room-join">
+                  <input id="roomCodeInput" type="text" maxlength="5" placeholder="ROOM" autocomplete="off">
+                  <button id="joinRoomBtn" class="secondary">Join</button>
+                </div>
+              </div>
+              <div class="room-meta">
+                <div class="room-meta-box">
+                  <span class="stat-label">Room Code</span>
+                  <strong id="roomCodeValue">-----</strong>
+                </div>
+                <div class="room-meta-box">
+                  <span class="stat-label">You Are</span>
+                  <strong id="playerSlotLabel">Not Joined</strong>
+                </div>
+              </div>
+              <div class="room-actions" id="matchReadyActions" hidden>
+                <button id="matchReadyBtn" class="primary">Start Match</button>
+              </div>
+              <p class="helper-text" id="roomHelpText">Quick Match starts automatically when you enter Battle Mode. For friends, use Private Room and share the code.</p>
+            </article>
+
+            <article class="setup-card readiness-card">
+              <div class="card-row">
+                <h3>Preparation Check</h3>
+                <span class="status-pill" id="setupModeBadge">Solo</span>
+              </div>
+              <div class="readiness-grid">
+                <div class="readiness-item">
+                  <span class="status-light" id="cameraReadyLight"></span>
+                  <div>
+                    <strong>Camera Check</strong>
+                    <p id="cameraStatus">Camera idle</p>
+                  </div>
+                </div>
+                <div class="readiness-item">
+                  <span class="status-light" id="poseReadyLight"></span>
+                  <div>
+                    <strong>Ready Indicator</strong>
+                    <p id="readyStateText">Waiting for camera and pose model</p>
+                  </div>
+                </div>
+              </div>
+              <div class="progress-block">
+                <div class="progress-head">
+                  <span>Pose Model</span>
+                  <strong id="poseProgressLabel">Loading...</strong>
+                </div>
+                <div class="progress-track">
+                  <div class="progress-fill" id="poseProgressFill"></div>
+                </div>
+              </div>
+              <div class="status-callout" id="statusText">Start the camera, line up sideways, and the game will begin automatically.</div>
+              <button id="startArenaBtn" class="primary arena-cta" hidden>Start Arena</button>
+            </article>
           </div>
-          <div class="room-actions">
-            <button id="createRoomBtn" class="primary">Create Room</button>
-            <div class="room-join">
-              <input id="roomCodeInput" type="text" maxlength="5" placeholder="ROOM" autocomplete="off">
-              <button id="joinRoomBtn" class="secondary">Join</button>
+        </aside>
+
+        <section class="camera-stage" id="cameraStage">
+          <div class="stage-frame" id="stageFrame">
+            <div class="preview-badge">Camera Check</div>
+            <div class="video-stack" id="videoStack">
+              <video id="video" playsinline></video>
+              <canvas id="overlay"></canvas>
+              <div class="positioning-guide" id="positioningGuide">
+                <div class="guide-outline"></div>
+                <div class="guide-copy">
+                  <strong>Positioning Guide</strong>
+                  <span>Stand full-body in frame, side-on to the camera.</span>
+                </div>
+              </div>
+              <div class="count-burst" id="countBurst" aria-live="polite">0</div>
+              <div class="damage-burst" id="damageBurst" aria-live="polite">-10 HP</div>
+              <div class="punch-burst" id="punchBurst" aria-live="polite">ATTACK!</div>
+              <div class="arena-flash" id="arenaFlash" hidden></div>
+              <div class="finish-overlay" id="finishOverlay" hidden>
+                <div class="finish-card">
+                  <div class="finish-title" id="finishTitle">Winner!</div>
+                  <button id="backToMenuBtn" class="secondary">Back to Lobby</button>
+                </div>
+              </div>
+              <div class="start-battle-overlay" id="startBattleOverlay" hidden>
+                <button id="startBattleOverlayBtn" class="primary battle-start-btn">Start Arena</button>
+                <div class="battle-countdown" id="battleCountdown" hidden>3</div>
+              </div>
+              <div class="arena-topbar">
+                <div class="arena-stat arena-stat-left player-panel" id="localPlayerPanel">
+                  <span class="arena-label">You</span>
+                  <div class="arena-hp-track" id="localPlayerTrack"><div class="arena-hp-fill player-one" id="overlayPlayer1HpBar"></div></div>
+                  <strong id="overlayPlayer1HpLabel">30</strong>
+                  <small class="arena-meta" id="overlayPlayer1Meta">ATK x0</small>
+                </div>
+                <div class="arena-stat arena-stat-right enemy-panel" id="opponentPlayerPanel">
+                  <span class="arena-label">Enemy</span>
+                  <div class="arena-hp-track" id="opponentPlayerTrack"><div class="arena-hp-fill player-two" id="overlayPlayer2HpBar"></div></div>
+                  <strong id="overlayPlayer2HpLabel">30</strong>
+                  <small class="arena-meta" id="overlayPlayer2Meta">ATK x0</small>
+                </div>
+              </div>
+              <div class="arena-corner arena-corner-left player-panel" id="localRepPanel">
+                <span class="arena-label">Reps</span>
+                <strong id="player1Score">0</strong>
+              </div>
+              <div class="arena-corner arena-corner-right enemy-panel" id="opponentRepPanel">
+                <span class="arena-label">Enemy</span>
+                <strong id="player2Score">0</strong>
+              </div>
+              <div class="camera-overlay">
+                <div class="overlay-pill accent" id="poseStatus">Pose model loading...</div>
+                <button id="arenaMenuBtn" class="ghost mini-btn">Pause</button>
+              </div>
+              <div class="battle-overlay" id="battleOverlay" hidden>
+                <div class="arena-center-stack">
+                  <div class="arena-center-text" id="arenaAlertText"></div>
+                  <div class="arena-center-hint" id="arenaAlertHint"></div>
+                </div>
+              </div>
+              <div class="game-hud">
+                <div class="hud-card">
+                  <span class="hud-label">Live Count</span>
+                  <strong id="hudLiveCount">0</strong>
+                </div>
+                <div class="hud-card hud-card-accent">
+                  <span class="hud-label">Mode / Target</span>
+                  <strong id="roundLabel">Solo Run</strong>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="room-meta">
-            <div class="room-meta-box">
-              <span class="stat-label">Room Code</span>
-              <strong id="roomCodeValue">-----</strong>
-            </div>
-            <div class="room-meta-box">
-              <span class="stat-label">You Are</span>
-              <strong id="playerSlotLabel">Not Joined</strong>
-            </div>
-          </div>
-          <div class="room-actions secondary-row">
-            <button id="startRemoteMatchBtn" class="primary">Start Online Match</button>
-            <button id="resetRemoteMatchBtn" class="secondary">Reset Match</button>
-          </div>
-          <p class="helper-text" id="roomHelpText">
-            Create a room on one phone, share the code, then have the second player join from their own phone.
-          </p>
-        </div>
 
-        <div class="stats-grid">
-          <article class="card stat-card">
-            <span class="stat-label">Live Count</span>
-            <strong id="liveCount">0</strong>
-          </article>
-          <article class="card stat-card">
-            <span class="stat-label">Form State</span>
-            <strong id="formState">Waiting</strong>
-          </article>
-          <article class="card stat-card">
-            <span class="stat-label">Stage</span>
-            <strong id="stageValue">1</strong>
-          </article>
-          <article class="card stat-card">
-            <span class="stat-label">Target / Timer</span>
-            <strong id="targetValue">10 reps</strong>
-          </article>
-        </div>
-
-        <div class="card scoreboard-card">
-          <div class="card-header">
-            <h2>Match Board</h2>
-            <span id="roundLabel">Solo Run</span>
+          <div class="controls" id="setupControls">
+            <button id="startCameraBtn" class="primary">Start Camera</button>
+            <button id="switchCameraBtn" class="secondary">Switch Camera</button>
           </div>
-          <div class="scoreboard">
-            <div class="score-box">
+        </section>
+      </section>
+
+      <section class="screen profile-screen" id="profileScreen">
+        <div class="profile-hub-shell">
+          <div class="profile-hub-header">
+            <div>
+              <p class="eyebrow">Player Hub</p>
+              <h2>Rank Progression</h2>
+              <p class="muted-copy">Track your climb, review your account stats, and compare your points on the global board.</p>
+            </div>
+            <button id="backToLobbyProfileBtn" class="ghost mini-btn">Back to Lobby</button>
+          </div>
+
+          <div class="profile-hub-grid">
+            <article class="profile-hub-card profile-overview-card">
+              <div class="card-row">
+                <h3>Account Snapshot</h3>
+                <span class="rank-badge" id="profileHubRankBadge">Rookie</span>
+              </div>
+              <div class="profile-hero-line">
+                <strong id="profileHubName">Guest Fighter</strong>
+                <span id="profileHubPoints">0 PTS</span>
+              </div>
+              <p class="helper-text" id="profileHubHint">Sign in with Google to save your progression across devices.</p>
+              <div class="profile-progress-block">
+                <div class="progress-head">
+                  <span>Next Rank</span>
+                  <strong id="nextRankLabel">Bronze</strong>
+                </div>
+                <div class="progress-track">
+                  <div class="progress-fill rank-progress-fill" id="rankProgressFill"></div>
+                </div>
+                <small class="helper-text" id="rankProgressText">0 / 80 points to Bronze</small>
+              </div>
+              <div class="profile-stats-grid profile-hub-stats">
+                <div class="profile-stat-box">
+                  <span class="stat-label">Solo Sessions</span>
+                  <strong id="profileHubSoloSessions">0</strong>
+                </div>
+                <div class="profile-stat-box">
+                  <span class="stat-label">Battle Matches</span>
+                  <strong id="profileHubBattleMatches">0</strong>
+                </div>
+                <div class="profile-stat-box">
+                  <span class="stat-label">Win Rate</span>
+                  <strong id="profileHubWinRate">0%</strong>
+                </div>
+                <div class="profile-stat-box">
+                  <span class="stat-label">Challenge Status</span>
+                  <strong id="profileHubChallengeStatus">Available</strong>
+                </div>
+              </div>
+            </article>
+
+            <article class="profile-hub-card">
+              <div class="card-row">
+                <h3>Rank Ladder</h3>
+                <span class="chip">Live</span>
+              </div>
+              <div class="rank-ladder" id="rankLadder"></div>
+            </article>
+
+            <article class="profile-hub-card">
+              <div class="card-row">
+                <h3>Progress History</h3>
+                <span class="chip">Summary</span>
+              </div>
+              <div class="history-list" id="profileHistoryList"></div>
+            </article>
+
+            <article class="profile-hub-card leaderboard-card">
+              <div class="card-row">
+                <h3>Leaderboard</h3>
+                <span class="chip danger" id="leaderboardStatus">Loading</span>
+              </div>
+              <div class="leaderboard-list" id="leaderboardList"></div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen results-screen" id="resultsScreen">
+        <div class="results-panel">
+          <p class="eyebrow">Page 4</p>
+          <h2 id="resultsTitle">Victory</h2>
+          <p id="resultsSubtitle" class="muted-copy">Arena complete. Here is your final breakdown.</p>
+
+          <div class="results-summary" id="resultsSummary">
+            <div class="results-card">
+              <span class="stat-label">Final Reps</span>
+              <strong id="resultsPrimaryStat">0</strong>
+              <small id="resultsPrimaryNote">Total reps landed</small>
+            </div>
+            <div class="results-card">
+              <span class="stat-label">Arena Outcome</span>
+              <strong id="resultsSecondaryStat">Stage Clear</strong>
+              <small id="resultsSecondaryNote">Ready for the next round</small>
+            </div>
+          </div>
+
+          <div class="comparison-table">
+            <div class="comparison-head">Comparison Card</div>
+            <div class="comparison-row comparison-row-head">
+              <span>Stat</span>
               <span>Player 1</span>
-              <strong id="player1Score">0</strong>
-            </div>
-            <div class="score-box">
               <span>Player 2</span>
-              <strong id="player2Score">0</strong>
+            </div>
+            <div class="comparison-row">
+              <span>Final Reps</span>
+              <strong id="resultPlayer1Reps">0</strong>
+              <strong id="resultPlayer2Reps">0</strong>
+            </div>
+            <div class="comparison-row">
+              <span>HP Damage</span>
+              <strong id="resultPlayer1Damage">0</strong>
+              <strong id="resultPlayer2Damage">0</strong>
+            </div>
+            <div class="comparison-row">
+              <span>HP Left</span>
+              <strong id="player1HpLabel">--</strong>
+              <strong id="player2HpLabel">--</strong>
             </div>
           </div>
-          <p id="statusText" class="status-text">
-            Start the camera, line up sideways, and the game will begin automatically.
-          </p>
-        </div>
 
-        <div class="card tips-card">
-          <h2>How To Play</h2>
-          <ul>
-            <li>Place the phone where your full body is visible from the side.</li>
-            <li>Keep your hips, knees, and ankles visible for better counting.</li>
-            <li>Single Player: finish the target to unlock the next stage.</li>
-            <li>2 Players: both phones join the same room and race live for 60 seconds.</li>
-          </ul>
+          <div class="results-actions">
+            <button id="playAgainBtn" class="primary">Play Again</button>
+            <button id="backToLobbyResultsBtn" class="secondary">Back to Lobby</button>
+          </div>
         </div>
       </section>
     </main>
+  </div>
+
+  <div class="modal" id="howToPlayModal" hidden>
+    <div class="modal-backdrop" id="howToPlayBackdrop"></div>
+    <div class="modal-card">
+      <div class="card-row">
+        <h3>How to Play</h3>
+        <button id="closeHowToPlayBtn" class="ghost mini-btn">Close</button>
+      </div>
+      <ul class="howto-list">
+        <li>Place the phone so your full body is visible from the side.</li>
+        <li>Wait for the readiness light to turn green before starting.</li>
+        <li>Single Player: clear the rep target to progress to the next stage.</li>
+        <li>Battle Mode: Quick Match auto-finds an opponent, or use Private Room for a friend.</li>
+        <li>Every 5 squats gives you 1 attack charge. Raise both hands to strike, and squat during danger to block.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="modal" id="arenaMenu" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-card compact-card">
+      <h3>Pause Arena</h3>
+      <p class="helper-text">Resume the match or leave the arena and return to the lobby.</p>
+      <div class="results-actions">
+        <button id="arenaResumeBtn" class="primary">Resume</button>
+        <button id="arenaQuitBtn" class="secondary">Quit to Lobby</button>
+      </div>
+    </div>
+  </div>
+
+  <div hidden aria-hidden="true">
+    <strong id="liveCount">0</strong>
+    <strong id="formState">Waiting</strong>
+    <strong id="stageValue">1</strong>
+    <strong id="targetValue">10 reps</strong>
+    <div id="player1HpBar"></div>
+    <div id="player2HpBar"></div>
   </div>
 
   <script type="module" src="./app.js"></script>

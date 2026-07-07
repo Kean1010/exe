@@ -69,9 +69,9 @@ async function readJson(req) {
   });
 }
 
-function createRoomCode() {
+function createRoomCode(prefix = "") {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
+  let code = String(prefix || "").toUpperCase();
 
   while (code.length < 5) {
     code += alphabet[Math.floor(Math.random() * alphabet.length)];
@@ -83,9 +83,9 @@ function createRoomCode() {
 function makeRoomSnapshot(row) {
   const now = Date.now();
   const startedAt = row.started_at ? new Date(row.started_at).getTime() : null;
-  const matchDurationMs = Number(row.match_duration_ms || MATCH_SECONDS * 1000);
+  const matchDurationMs = Number(row.match_duration_ms ?? MATCH_SECONDS * 1000);
   const elapsedMs = startedAt ? Math.max(0, now - startedAt) : 0;
-  const timeLeftMs = startedAt
+  const timeLeftMs = startedAt && matchDurationMs > 0
     ? Math.max(0, matchDurationMs - elapsedMs)
     : matchDurationMs;
 
@@ -159,9 +159,15 @@ async function getRoomByCode(code) {
   return rows?.[0] || null;
 }
 
-async function ensureUniqueRoomCode() {
+async function ensureUniqueRoomCode(options = {}) {
+  const prefix = String(options.prefix || "").toUpperCase();
+  const avoidPrefix = String(options.avoidPrefix || "").toUpperCase();
+
   for (let attempt = 0; attempt < 10; attempt += 1) {
-    const code = createRoomCode();
+    const code = createRoomCode(prefix);
+    if (avoidPrefix && code.startsWith(avoidPrefix)) {
+      continue;
+    }
     const existing = await getRoomByCode(code);
     if (!existing) {
       return code;
@@ -186,7 +192,12 @@ async function finalizeRoomIfExpired(row) {
     return row;
   }
 
-  const expiresAt = new Date(row.started_at).getTime() + Number(row.match_duration_ms || 0);
+  const matchDurationMs = Number(row.match_duration_ms || 0);
+  if (matchDurationMs <= 0) {
+    return row;
+  }
+
+  const expiresAt = new Date(row.started_at).getTime() + matchDurationMs;
   if (Date.now() < expiresAt) {
     return row;
   }
@@ -208,6 +219,7 @@ async function finalizeRoomIfExpired(row) {
 module.exports = {
   MATCH_SECONDS,
   allowCors,
+  createRoomCode,
   finalizeRoomIfExpired,
   getEnv,
   getPlayerSlot,

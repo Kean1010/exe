@@ -1,6 +1,5 @@
 const {
   allowCors,
-  finalizeRoomIfExpired,
   getPlayerSlot,
   getRoomByCode,
   handleOptions,
@@ -25,33 +24,21 @@ module.exports = async (req, res) => {
   try {
     const body = await readJson(req);
     const code = String(body.code || "").trim().toUpperCase();
-    let room = await getRoomByCode(code);
+    const room = await getRoomByCode(code);
 
     if (!room) {
       json(res, 404, { error: "Room not found" });
       return;
     }
 
-    room = await finalizeRoomIfExpired(room);
-
     if (!getPlayerSlot(room, body.playerId)) {
       json(res, 403, { error: "Player not recognized for this room" });
-      return;
-    }
-
-    if (!room.player1_name || !room.player2_name) {
-      json(res, 409, { error: "Both players must join before starting" });
       return;
     }
 
     const rows = await supabaseRequest(`rooms?code=eq.${encodeURIComponent(code)}`, {
       method: "PATCH",
       body: {
-        status: "live",
-        started_at: new Date().toISOString(),
-        match_duration_ms: 0,
-        player1_score: 0,
-        player2_score: 0,
         updated_at: new Date().toISOString()
       }
     });
