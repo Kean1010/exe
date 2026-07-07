@@ -663,16 +663,67 @@ async function fetchProfile() {
     id: user.id,
     display_name: user.user_metadata?.full_name || user.user_metadata?.name || "Arena Fighter",
     avatar_url: user.user_metadata?.avatar_url || "",
-    ...DEFAULT_PROFILE,
-    display_name: user.user_metadata?.full_name || user.user_metadata?.name || "Arena Fighter",
-    avatar_url: user.user_metadata?.avatar_url || "",
     daily_checkin_on: null,
     daily_challenge_completed_on: null
   };
 
+  const { data: existingProfile, error: fetchError } = await client
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (fetchError) {
+    console.error(fetchError);
+    profileHint.textContent = "Could not load your saved profile yet.";
+    gameState.progression.profile = { ...DEFAULT_PROFILE };
+    renderStats();
+    return;
+  }
+
+  if (existingProfile) {
+    const profilePatch = {};
+    const latestName = user.user_metadata?.full_name || user.user_metadata?.name || "Arena Fighter";
+    const latestAvatar = user.user_metadata?.avatar_url || "";
+
+    if (!existingProfile.display_name && latestName) {
+      profilePatch.display_name = latestName;
+    }
+    if (!existingProfile.avatar_url && latestAvatar) {
+      profilePatch.avatar_url = latestAvatar;
+    }
+
+    if (Object.keys(profilePatch).length > 0) {
+      const { data: updatedProfile, error: updateError } = await client
+        .from("profiles")
+        .update(profilePatch)
+        .eq("id", user.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        console.error(updateError);
+        gameState.progression.profile = { ...DEFAULT_PROFILE, ...existingProfile };
+      } else {
+        gameState.progression.profile = { ...DEFAULT_PROFILE, ...updatedProfile };
+      }
+    } else {
+      gameState.progression.profile = { ...DEFAULT_PROFILE, ...existingProfile };
+    }
+
+    renderStats();
+    fetchLeaderboard().catch((error) => {
+      console.error(error);
+    });
+    return;
+  }
+
   const { data, error } = await client
     .from("profiles")
-    .upsert(defaultRow, { onConflict: "id" })
+    .insert({
+      ...DEFAULT_PROFILE,
+      ...defaultRow
+    })
     .select()
     .single();
 
